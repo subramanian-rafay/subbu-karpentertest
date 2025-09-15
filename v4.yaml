@@ -1,0 +1,90 @@
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: pr-eks-nprd
+  annotations:
+    kubernetes.io/description: "General purpose EC2NodeClass for running Amazon Linux 2 nodes"
+spec:
+  amiFamily: AL2023
+  amiSelectorTerms:
+    - id: ami-039c11513e92b8c79
+  role: "KarpenterNodeRole"
+  subnetSelectorTerms:
+    - tags:
+        # karpenter.sh/discovery: "{{{ .global.Rafay.ClusterName }}}"
+        subnet_type: eks
+  securityGroupSelectorTerms:
+    - tags:
+        aws:eks:cluster-name: "{{{ .global.Rafay.ClusterName }}}"
+  tags:
+    ci_supportgroup: CloudOperations
+    repo: https://github.com/subbu-git/k8s-cluster-automation.git
+    environment: "{{{ .global.Rafay.ClusterLabels.env}}}"
+    supportowner: cloudoperations@subbu.com
+    security_classification: unclassified
+    tcode: t-07416
+    appid: facdb1e187332c10f012a7dd3fbb35ca
+    businessowner: cloudoperations@subbu.com
+    costcenter: "101292"
+    nodesmanagedby: karpenter
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeType: gp3
+        volumeSize: 40Gi
+        deleteOnTermination: true
+        encrypted: true
+  metadataOptions:
+    httpEndpoint: enabled
+    httpProtocolIPv6: disabled
+    httpPutResponseHopLimit: 2 # This is changed to disable IMDS access from containers not on the host network
+    httpTokens: required
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: pr-eks-nprd
+spec:
+  template:
+    metadata:
+      labels:
+        nodesmanagedby: karpenter
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: pr-eks-nprd
+      expireAfter: 1080h #45 days
+      terminationGracePeriod: 1h
+      requirements:
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values: ["2"]
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: ["c", "m", "r"]
+        - key: karpenter.k8s.aws/instance-family
+          operator: NotIn
+          values: ["c6g", "c7g", "m6g", "m7g", "r6g", "r7g"] # Exclude Graviton-based instances from c, m, r families
+        # - key: karpenter.k8s.aws/instance-cpu
+        #   operator: In
+        #   values: ["4", "8", "16", "32"]
+        # - key: topology.kubernetes.io/zone
+        #   operator: In
+        #   values: ["us-east-1a", "us-east-1b","us-east-1c","us-west-2a","us-west-2b","us-west-2c"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"] #"arm64", "amd64"
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand", "spot"] #"spot", "on-demand"
+        - key: kubernetes.io/os
+          operator: In
+          values: ["linux"]
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 30m
+  limits:
+    cpu: "200"
+    memory: "700Gi"
+  weight: 4
