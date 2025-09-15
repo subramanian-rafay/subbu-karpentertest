@@ -27,6 +27,7 @@ spec:
     businessowner: cloudoperations@subbu.com
     costcenter: "101292"
     nodesmanagedby: karpenter
+    checking: tagisworking
   blockDeviceMappings:
     - deviceName: /dev/xvda
       ebs:
